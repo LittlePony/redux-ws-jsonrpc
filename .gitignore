@@ -1,0 +1,13 @@
+node_modules
+coverage
+dist
+# IntelliJ
+*.iml
+.idea
+# MS
+.vscode
+# Apple
+.DS_Store
+yarn.lock
+.eslintcache
+
