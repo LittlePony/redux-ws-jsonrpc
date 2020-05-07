@@ -101,7 +101,7 @@ export const error = (originalAction: Action | null, err: Error, prefix: string)
     })
 );
 export const rpcNotification = (event: MessageEvent, prefix: string, methodName: string) => (
-    buildAction(`${prefix}::NOTIFY_${methodName.toUpperCase()}`, {
+    buildAction(`${prefix}::NOTIFICATION_${methodName.toUpperCase()}`, {
         event,
         message: JSON.parse(event.data),
         origin: event.origin,
