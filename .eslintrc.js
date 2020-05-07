@@ -23,24 +23,15 @@ module.exports = {
         "indent": ["error", 4],
         "@typescript-eslint/indent": ["error", 4],
         "@typescript-eslint/quotes": ["error", "double"],
-        "object-curly-newline": ["off"],
+        "object-curly-newline": "off",
         "arrow-parens": ["error", "as-needed"],
         "no-unused-vars": "off",
+        "no-console": "warn",
         "@typescript-eslint/no-unused-vars": ["error", {
             vars: "all",
             args: "after-used",
             ignoreRestSiblings: false,
         }],
         "implicit-arrow-linebreak": 0,
-        "react/sort-comp": [1, {
-            order: [
-                "type-annotations",
-                "static-methods",
-                "instance-variables",
-                "lifecycle",
-                "everything-else",
-                "render",
-            ],
-        }]
     },
 };
