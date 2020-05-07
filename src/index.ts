@@ -1,4 +1,4 @@
-import { connect, disconnect, rpcMethod, rpcNotify } from "./actions";
+import { connect, disconnect, sendMethod, sendNotification } from "./actions";
 import createMiddleware from "./createMiddleware";
 
 export * from "./actionTypes";
@@ -6,7 +6,7 @@ export * from "./actionTypes";
 export {
     connect,
     disconnect,
-    rpcMethod,
-    rpcNotify,
+    sendMethod,
+    sendNotification,
     createMiddleware as default,
 };

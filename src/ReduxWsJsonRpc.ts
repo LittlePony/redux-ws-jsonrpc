@@ -8,8 +8,8 @@ import {
     open,
     reconnectAttempt,
     reconnected,
-    notify,
-    buildMethod,
+    rpcNotification,
+    rpcMethod,
 } from "./actions";
 import { Action } from "./types";
 
@@ -150,7 +150,7 @@ export default class ReduxWsJsonRpc {
         const methodName = meta.method.toUpperCase();
 
         this.callMethod(meta.method, payload, id)
-            .then(({ result, prefix }) => dispatch(buildMethod(result, prefix, methodName)))
+            .then(({ result, prefix }) => dispatch(rpcMethod(result, prefix, methodName)))
             .catch(err => dispatch({ type: `METHOD_${methodName}_ERROR`, payload: err }));
     };
 
@@ -254,22 +254,20 @@ export default class ReduxWsJsonRpc {
         const data = JSON.parse(event.data);
         const { id, result, method } = data;
 
-        if (id && !method && (result || data.error)) {
-            if (this.queue[id]) {
-                const { timeout, promise } = this.queue[id];
-                const [resolve, reject] = promise;
-                if (timeout) {
-                    clearTimeout(timeout);
-                }
-                if (data.error) {
-                    reject(data.error);
-                } else {
-                    resolve({ result, prefix });
-                }
-                delete this.queue[id];
+        if (id && !method && (result || data.error) && this.queue[id]) {
+            const { timeout, promise } = this.queue[id];
+            const [resolve, reject] = promise;
+            if (timeout) {
+                clearTimeout(timeout);
             }
+            if (data.error) {
+                reject(data.error);
+            } else {
+                resolve({ result, prefix });
+            }
+            delete this.queue[id];
         } else if (!id && method) {
-            dispatch(notify(event, prefix, method));
+            dispatch(rpcNotification(event, prefix, method));
         } else {
             console.error("Unknown message type");
         }

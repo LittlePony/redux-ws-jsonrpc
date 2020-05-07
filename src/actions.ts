@@ -77,10 +77,10 @@ export const connect = (url: string, ...args: ConnectRestArgs) => {
     );
 };
 export const disconnect = (prefix?: string) => buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_DISCONNECT}`);
-export const rpcMethod = (method: string, msg: any, id?: any, prefix?: string) => (
+export const sendMethod = (method: string, msg: any, id?: any, prefix?: string) => (
     buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_METHOD}`, msg, { method, id })
 );
-export const rpcNotify = (method: string, msg: any, prefix?: string) => (
+export const sendNotification = (method: string, msg: any, prefix?: string) => (
     buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_NOTIFICATION}`, msg, { method })
 );
 
@@ -100,13 +100,13 @@ export const error = (originalAction: Action | null, err: Error, prefix: string)
         originalAction,
     })
 );
-export const notify = (event: MessageEvent, prefix: string, methodName: string) => (
+export const rpcNotification = (event: MessageEvent, prefix: string, methodName: string) => (
     buildAction(`${prefix}::NOTIFY_${methodName.toUpperCase()}`, {
         event,
         message: JSON.parse(event.data),
         origin: event.origin,
     })
 );
-export const buildMethod = (payload: any, prefix: string, methodName: string) => (
+export const rpcMethod = (payload: any, prefix: string, methodName: string) => (
     buildAction(`${prefix}::METHOD_${methodName.toUpperCase()}`, payload)
 );
