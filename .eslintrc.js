@@ -11,7 +11,7 @@ module.exports = {
     parser: "@typescript-eslint/parser",
     parserOptions: {
         ecmaVersion: 2015,
-        project: ["./tsconfig.json", "./tsconfig.tests.json"],
+        project: ["./tsconfig.json", "./tsconfig.tests.json", "./tsconfig.eslint.json"],
     },
     extends: [
         "airbnb-typescript",
@@ -20,7 +20,7 @@ module.exports = {
         "plugin:promise/recommended",
     ],
     rules: {
-        "indent": ["error", 4],
+        indent: ["error", 4],
         "@typescript-eslint/indent": ["error", 4],
         "@typescript-eslint/quotes": ["error", "double"],
         "object-curly-newline": "off",
