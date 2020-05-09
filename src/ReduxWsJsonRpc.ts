@@ -65,6 +65,8 @@ export default class ReduxWsJsonRpc {
     // After this time error will dispatched
     private methodTimeout: number = 3000;
 
+    private methodId: number = 0;
+
     /**
      * Constructor
      * @constructor
@@ -82,7 +84,7 @@ export default class ReduxWsJsonRpc {
      * @param {MiddlewareAPI} store
      * @param {Action} action
      */
-    connect = ({ dispatch }: MiddlewareAPI, { payload }: Action) => {
+    connect = ({dispatch}: MiddlewareAPI, {payload}: Action) => {
         this.close();
 
         const { prefix } = this.options;
@@ -113,7 +115,7 @@ export default class ReduxWsJsonRpc {
         }
     };
 
-    private buildRpcFrame = (method: string, params: any, id: any = undefined) =>
+    private buildRpcFrame = (method: string, params: any, id: number | undefined = undefined) =>
         JSON.stringify({
             jsonrpc: "2.0",
             method,
@@ -121,7 +123,7 @@ export default class ReduxWsJsonRpc {
             id,
         });
 
-    private callMethod = (method: string, payload: any, id: any) =>
+    private callMethod = (method: string, payload: any, id: number) =>
         new Promise<any>((resolve, reject) => {
             if (this.websocket) {
                 this.websocket.send(this.buildRpcFrame(method, payload, id));
@@ -144,14 +146,12 @@ export default class ReduxWsJsonRpc {
      *
      * @throws {Error} Socket connection must exist.
      */
-    sendMethod = ({ dispatch }: MiddlewareAPI, { payload, meta }: Action) => {
-        const id = (Math.round(Math.random() * 10000000)).toString();
-
+    sendMethod = ({dispatch}: MiddlewareAPI, {payload, meta}: Action) => {
+        this.methodId += 1;
         const methodName = meta.method.toUpperCase();
-
-        this.callMethod(meta.method, payload, id)
-            .then(({ result, prefix }) => dispatch(rpcMethod(result, prefix, methodName)))
-            .catch(err => dispatch({ type: `METHOD_${methodName}_ERROR`, payload: err }));
+        this.callMethod(meta.method, payload, this.methodId)
+            .then(({result, prefix}) => dispatch(rpcMethod(result, prefix, methodName)))
+            .catch(err => dispatch({type: `METHOD_${methodName}_ERROR`, payload: err}));
     };
 
     /**
@@ -181,7 +181,7 @@ export default class ReduxWsJsonRpc {
         dispatch(closed(event, prefix));
 
         // Conditionally attempt reconnection if enabled and applicable
-        const { reconnectOnClose } = this.options;
+        const {reconnectOnClose} = this.options;
         if (reconnectOnClose && this.canAttemptReconnect()) {
             this.handleBrokenConnection(dispatch);
         }
@@ -252,19 +252,16 @@ export default class ReduxWsJsonRpc {
         event: MessageEvent,
     ) => {
         const data = JSON.parse(event.data);
-        const { id, result, method } = data;
+        const {id, result, method} = data;
 
         if (id && !method && (result || data.error) && this.queue[id]) {
-            const { timeout, promise } = this.queue[id];
+            const {timeout, promise} = this.queue[id];
             const [resolve, reject] = promise;
-            if (timeout) {
-                clearTimeout(timeout);
-            }
-            if (data.error) {
-                reject(data.error);
-            } else {
-                resolve({ result, prefix });
-            }
+
+            timeout && clearTimeout(timeout);
+            data.error
+                ? reject(new Error(data.error.message || "Unknown server error"))
+                : resolve({result, prefix});
             delete this.queue[id];
         } else if (!id && method) {
             dispatch(rpcNotification(event, prefix, method));
@@ -296,7 +293,7 @@ export default class ReduxWsJsonRpc {
      * @param {Dispatch} dispatch
      */
     private handleBrokenConnection = (dispatch: Dispatch) => {
-        const { prefix, reconnectInterval } = this.options;
+        const {prefix, reconnectInterval} = this.options;
 
         this.websocket = null;
 
@@ -311,8 +308,8 @@ export default class ReduxWsJsonRpc {
         // Attempt to reconnect immediately by calling connect with assertions
         // that the arguments conform to the types we expect.
         this.connect(
-            { dispatch } as MiddlewareAPI,
-            { payload: { url: this.lastSocketUrl } } as Action,
+            {dispatch} as MiddlewareAPI,
+            {payload: {url: this.lastSocketUrl}} as Action,
         );
 
         // Attempt reconnecting on an interval.
@@ -323,8 +320,8 @@ export default class ReduxWsJsonRpc {
 
             // Call connect again, same way.
             this.connect(
-                { dispatch } as MiddlewareAPI,
-                { payload: { url: this.lastSocketUrl } } as Action,
+                {dispatch} as MiddlewareAPI,
+                {payload: {url: this.lastSocketUrl}} as Action,
             );
         }, reconnectInterval);
     };

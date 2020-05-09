@@ -14,7 +14,7 @@ module.exports = {
         project: ["./tsconfig.json", "./tsconfig.tests.json", "./tsconfig.eslint.json"],
     },
     extends: [
-        "airbnb-typescript",
+        "airbnb-typescript/base",
         "plugin:eslint-comments/recommended",
         "plugin:jest/recommended",
         "plugin:promise/recommended",
@@ -23,10 +23,13 @@ module.exports = {
         indent: ["error", 4],
         "@typescript-eslint/indent": ["error", 4],
         "@typescript-eslint/quotes": ["error", "double"],
+        "no-unused-expressions": "off",
+        "@typescript-eslint/no-unused-expressions": ["off"],
         "object-curly-newline": "off",
+        "object-curly-spacing": "off",
         "arrow-parens": ["error", "as-needed"],
-        "no-unused-vars": "off",
         "no-console": "warn",
+        "no-unused-vars": "off",
         "@typescript-eslint/no-unused-vars": ["error", {
             vars: "all",
             args: "after-used",
