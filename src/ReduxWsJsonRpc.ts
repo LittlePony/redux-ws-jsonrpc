@@ -59,9 +59,6 @@ export default class ReduxWsJsonRpc {
     // We"ll create an interval to try and reconnect if the socket connection breaks.
     private reconnectTimeout: NodeJS.Timeout | undefined = undefined;
 
-    // Keep track of if the WebSocket connection has ever successfully opened.
-    private hasOpened = false;
-
     // RPC Methods response waiting queue
     private readonly queue: Queue;
 
@@ -267,11 +264,6 @@ export default class ReduxWsJsonRpc {
         }
         // Now we"re fully open and ready to send messages.
         dispatch(open(event, prefix));
-
-        // Track that we"ve been able to open the connection. We can use this flag
-        // for error handling later, ensuring we don"t try to reconnect when a
-        // connection was never able to open in the first place.
-        this.hasOpened = true;
     };
 
     /**
@@ -317,7 +309,6 @@ export default class ReduxWsJsonRpc {
         if (this.websocket) {
             this.websocket.close(code || 1000, reason || "Connection closed by client");
             this.websocket = undefined;
-            this.hasOpened = false;
         }
     };
 }
