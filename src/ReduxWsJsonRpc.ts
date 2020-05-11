@@ -17,6 +17,7 @@ interface Options {
     reconnectInterval: number;
     reconnectOnClose: boolean;
     onReconnect?: () => void;
+    rpcTimeout: number;
 }
 
 interface QueueElement {
@@ -29,7 +30,7 @@ interface QueueElement {
 }
 
 interface Queue {
-    [x: number]: QueueElement;
+    [id: number]: QueueElement;
 }
 
 /**
@@ -57,9 +58,7 @@ export default class ReduxWsJsonRpc {
     // RPC Methods response waiting queue
     private readonly queue: Queue;
 
-    // After this time error will dispatched
-    private methodTimeout: number = 3000;
-
+    // RPC method id with autoincrement
     private methodId: number = 0;
 
     /**
@@ -133,7 +132,7 @@ export default class ReduxWsJsonRpc {
                 this.queue[id].timeout = setTimeout(() => {
                     delete this.queue[id];
                     reject(new Error("Server response timeout"));
-                }, this.methodTimeout);
+                }, this.options.rpcTimeout);
             } else {
                 throw new WebSocketNotInitialized();
             }

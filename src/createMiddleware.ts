@@ -12,6 +12,7 @@ const defaultOptions = {
     reconnectInterval: 2000,
     reconnectOnClose: false,
     prefix: actionTypes.DEFAULT_PREFIX,
+    rpcTimeout: 3000,
 };
 
 /**
@@ -22,8 +23,8 @@ const defaultOptions = {
  * @returns {Middleware}
  */
 export default (rawOptions?: Options): Middleware => {
-    const options = { ...defaultOptions, ...rawOptions };
-    const { prefix } = options;
+    const options = {...defaultOptions, ...rawOptions};
+    const {prefix} = options;
     const actionPrefixExp = RegExp(`^${prefix}::`);
 
     // Create a new redux websocket instance.
@@ -39,7 +40,7 @@ export default (rawOptions?: Options): Middleware => {
 
     // Middleware function.
     return (store: MiddlewareAPI) => next => (action: Action) => {
-        const { dispatch } = store;
+        const {dispatch} = store;
         const { type: actionType } = action;
 
         // Check if action type matches prefix

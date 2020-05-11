@@ -16,10 +16,11 @@ type Action =
     | { type: typeof WEBSOCKET_SEND_NOTIFICATION, payload: any, meta: any };
 
 interface Options {
-    prefix?: string
-    reconnectInterval?: number
-    reconnectOnClose?: boolean
-    onReconnect?: () => void
+    prefix?: string;
+    reconnectInterval?: number;
+    reconnectOnClose?: boolean;
+    onReconnect?: () => void;
+    rpcTimeout?: number;
 }
 
 export {
