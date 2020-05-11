@@ -16,6 +16,7 @@ import {
     AfterCloseOptions,
     BeforeReconnectParams,
     BeforeReconnectOptions,
+    Queue,
 } from "./types";
 
 interface Options {
@@ -25,19 +26,6 @@ interface Options {
     afterClose?: (params: AfterCloseParams, d: Dispatch) => AfterCloseOptions;
     beforeReconnect?: (params: BeforeReconnectParams, d: Dispatch) => BeforeReconnectOptions;
     rpcTimeout: number;
-}
-
-interface QueueElement {
-    promise: [
-        Parameters<ConstructorParameters<typeof Promise>[0]>[0],
-        Parameters<ConstructorParameters<typeof Promise>[0]>[1]
-    ];
-    timeout?: ReturnType<typeof setTimeout>;
-    method?: string;
-}
-
-interface Queue {
-    [id: number]: QueueElement;
 }
 
 /**
@@ -102,13 +90,13 @@ export default class ReduxWsJsonRpc {
      *
      */
     disconnect = () => {
-        this.reconnectTimeout && clearTimeout(this.reconnectTimeout);
-        this.reconnectTimeout = undefined;
+        this.clearTimeout();
         this.websocket && this.close();
     };
 
     /**
      * Create JSON-RPC 2.0 compatible message
+     *
      * @param {string} method
      * @param {any} params
      * @param {number} id
@@ -144,8 +132,6 @@ export default class ReduxWsJsonRpc {
      *
      * @param {MiddlewareAPI} store
      * @param {Action} action
-     *
-     * @throws {Error} Socket connection must exist.
      */
     sendMethod = ({dispatch}: MiddlewareAPI, {payload, meta}: Action) => {
         this.methodId += 1;
@@ -187,7 +173,7 @@ export default class ReduxWsJsonRpc {
         // "dirty" closed connection
         if (!event.wasClean) {
             // Notify Redux that our connection broke.
-            this.reconnectCount === 0 && dispatch(broken(prefix));
+            reconnectCount === 0 && dispatch(broken(prefix));
 
             // get new options if callback is defined
             const options = this.options.afterClose
@@ -208,10 +194,15 @@ export default class ReduxWsJsonRpc {
      * @param {Dispatch} dispatch
      * @param {string} prefix
      */
-    private handleError = (dispatch: Dispatch, prefix: string) => {
+    private handleError = (dispatch: Dispatch, prefix: string) =>
         dispatch(error(null, new Error("WebSocket error"), prefix));
-    };
 
+    /**
+     * Reconnection attempt
+     *
+     * @param {Dispatch} dispatch
+     * @param {string} lastUrl
+     */
     private reconnect = (dispatch: Dispatch, lastUrl: string) => {
         this.reconnectTimeout = undefined;
         dispatch(reconnecting(this.reconnectCount, this.options.prefix));
@@ -255,11 +246,9 @@ export default class ReduxWsJsonRpc {
         event: Event,
     ) => {
         // Clean up any outstanding reconnection attempts.
-        if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-            this.reconnectTimeout = undefined;
+        this.clearTimeout();
+        if (this.reconnectCount > 0) {
             this.reconnectCount = 0;
-
             dispatch(reconnected(prefix));
         }
         // Now we"re fully open and ready to send messages.
@@ -300,7 +289,6 @@ export default class ReduxWsJsonRpc {
 
     /**
      * Close the WebSocket connection.
-     * @private
      *
      * @param {number} [code]
      * @param {string} [reason]
@@ -310,5 +298,10 @@ export default class ReduxWsJsonRpc {
             this.websocket.close(code || 1000, reason || "Connection closed by client");
             this.websocket = undefined;
         }
+    };
+
+    private clearTimeout = () => {
+        this.reconnectTimeout && clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = undefined;
     };
 }

@@ -43,6 +43,19 @@ interface Options {
     rpcTimeout?: number;
 }
 
+export interface QueueElement {
+    promise: [
+        Parameters<ConstructorParameters<typeof Promise>[0]>[0],
+        Parameters<ConstructorParameters<typeof Promise>[0]>[1]
+    ];
+    timeout?: ReturnType<typeof setTimeout>;
+    method?: string;
+}
+
+export interface Queue {
+    [id: number]: QueueElement;
+}
+
 export {
     Action,
     Options,
