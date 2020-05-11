@@ -194,7 +194,7 @@ export default class ReduxWsJsonRpc {
 
         // get new options if callback is defined
         const options = this.options.afterClose
-            && this.options.afterClose({wasClean, lastUrl, reconnectCount}, dispatch);
+            && this.options.afterClose({lastUrl, reconnectCount}, dispatch);
 
         // Schedule reconnection attempt if enabled and "dirty" closed
         if ((options?.reconnectOnClose || this.options.reconnectOnClose) && !wasClean) {
