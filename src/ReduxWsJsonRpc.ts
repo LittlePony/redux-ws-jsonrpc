@@ -10,13 +10,20 @@ import {
     rpcNotification,
     rpcMethod,
 } from "./actions";
-import { Action } from "./types";
+import {
+    Action,
+    AfterCloseParams,
+    AfterCloseOptions,
+    BeforeReconnectParams,
+    BeforeReconnectOptions,
+} from "./types";
 
 interface Options {
     prefix: string;
     reconnectInterval: number;
     reconnectOnClose: boolean;
-    onReconnect?: () => void;
+    afterClose?: (params: AfterCloseParams, d: Dispatch) => AfterCloseOptions;
+    beforeReconnect?: (params: BeforeReconnectParams, d: Dispatch) => BeforeReconnectOptions;
     rpcTimeout: number;
 }
 
@@ -80,7 +87,7 @@ export default class ReduxWsJsonRpc {
      */
     connect = ({dispatch}: MiddlewareAPI, {payload}: Action) => {
         this.close();
-        const { prefix } = this.options;
+        const {prefix} = this.options;
         this.websocket = new WebSocket(payload.url, payload.protocols || undefined);
 
         this.websocket.addEventListener("close", event =>
@@ -96,14 +103,11 @@ export default class ReduxWsJsonRpc {
     /**
      * WebSocket disconnect event handler.
      *
-     * @throws {Error} Socket connection must exist.
      */
     disconnect = () => {
-        if (this.websocket) {
-            this.close();
-        } else {
-            throw new WebSocketNotInitialized();
-        }
+        this.reconnectTimeout && clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = undefined;
+        this.websocket && this.close();
     };
 
     /**
@@ -179,15 +183,24 @@ export default class ReduxWsJsonRpc {
      */
     private handleClose = (dispatch: Dispatch, prefix: string, event: CloseEvent) => {
         const lastUrl = (event.target as WebSocket).url;
+        const {wasClean} = event;
+        const {reconnectCount} = this;
+
         dispatch(closed(event, prefix));
 
         // Notify Redux that our connection broke.
-        this.reconnectCount === 0 && !event.wasClean
+        this.reconnectCount === 0 && !wasClean
             && dispatch(broken(prefix));
 
+        // get new options if callback is defined
+        const options = this.options.afterClose
+            && this.options.afterClose({wasClean, lastUrl, reconnectCount}, dispatch);
+
         // Schedule reconnection attempt if enabled and "dirty" closed
-        this.options.reconnectOnClose && !event.wasClean
-            && this.scheduleReconnect(dispatch, lastUrl);
+        if ((options?.reconnectOnClose || this.options.reconnectOnClose) && !wasClean) {
+            const interval = options?.reconnectInterval || this.options.reconnectInterval;
+            this.scheduleReconnect(dispatch, lastUrl, interval);
+        }
     };
 
     /**
@@ -201,6 +214,7 @@ export default class ReduxWsJsonRpc {
     };
 
     private reconnect = (dispatch: Dispatch, lastUrl: string) => {
+        this.reconnectTimeout = undefined;
         dispatch(reconnecting(this.reconnectCount, this.options.prefix));
         this.connect(
             {dispatch} as MiddlewareAPI,
@@ -212,13 +226,14 @@ export default class ReduxWsJsonRpc {
      * Handle a broken socket connection.
      * @param {Dispatch} dispatch
      * @param {string} lastUrl
+     * @param {number} interval
      */
-    private scheduleReconnect = (dispatch: Dispatch, lastUrl: string) => {
+    private scheduleReconnect = (dispatch: Dispatch, lastUrl: string, interval: number) => {
         this.websocket = undefined;
         this.reconnectCount += 1;
         this.reconnectTimeout = setTimeout(
             () => this.reconnect(dispatch, lastUrl),
-            this.options.reconnectInterval,
+            interval,
         );
     };
 
@@ -267,7 +282,7 @@ export default class ReduxWsJsonRpc {
         const data = JSON.parse(event.data);
         const {id, result, method} = data;
 
-        if (id && !method && (result || data.error) && this.queue[id]) {
+        if (id && !method && (result || data.error) && this.queue[id]) { // Method response
             const {timeout, promise} = this.queue[id];
             const [resolve, reject] = promise;
 
@@ -276,7 +291,7 @@ export default class ReduxWsJsonRpc {
                 ? reject(new Error(data.error.message || "Unknown server error"))
                 : resolve({result, prefix});
             delete this.queue[id];
-        } else if (!id && method) {
+        } else if (!id && method) { // Server notification
             dispatch(rpcNotification(event, prefix, method));
         } else {
             dispatch(error(null, new Error("Unknown server message type"), prefix));

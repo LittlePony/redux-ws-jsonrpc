@@ -48,10 +48,10 @@ function buildAction<T>(actionType: string, payload?: T, meta?: any): BuiltActio
             ...meta,
         },
         // Mixin the `error` key if the payload is an Error.
-        ...(payload instanceof Error ? { error: true } : null),
+        ...(payload instanceof Error ? {error: true} : null),
     };
 
-    return payload ? { ...base, payload } : base;
+    return payload ? {...base, payload} : base;
 }
 
 // Action creators for user dispatched actions. These actions are all optionally
