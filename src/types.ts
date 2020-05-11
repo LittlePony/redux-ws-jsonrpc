@@ -22,16 +22,16 @@ export interface AfterCloseParams {
 }
 
 export interface AfterCloseOptions {
-    reconnectInterval: number;
-    reconnectOnClose: boolean;
+    reconnectInterval?: number;
+    reconnectOnClose?: boolean;
 }
 
 export interface BeforeReconnectParams {
-
+    lastUrl: string;
 }
 
 export interface BeforeReconnectOptions {
-
+    url: string;
 }
 
 interface Options {

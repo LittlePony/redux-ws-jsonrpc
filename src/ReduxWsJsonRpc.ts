@@ -183,23 +183,25 @@ export default class ReduxWsJsonRpc {
      */
     private handleClose = (dispatch: Dispatch, prefix: string, event: CloseEvent) => {
         const lastUrl = (event.target as WebSocket).url;
-        const {wasClean} = event;
         const {reconnectCount} = this;
 
         dispatch(closed(event, prefix));
 
-        // Notify Redux that our connection broke.
-        this.reconnectCount === 0 && !wasClean
-            && dispatch(broken(prefix));
+        // "dirty" closed connection
+        if (!event.wasClean) {
+            // Notify Redux that our connection broke.
+            this.reconnectCount === 0 && dispatch(broken(prefix));
 
-        // get new options if callback is defined
-        const options = this.options.afterClose
-            && this.options.afterClose({lastUrl, reconnectCount}, dispatch);
+            // get new options if callback is defined
+            const options = this.options.afterClose
+                && this.options.afterClose({lastUrl, reconnectCount}, dispatch);
 
-        // Schedule reconnection attempt if enabled and "dirty" closed
-        if ((options?.reconnectOnClose || this.options.reconnectOnClose) && !wasClean) {
-            const interval = options?.reconnectInterval || this.options.reconnectInterval;
-            this.scheduleReconnect(dispatch, lastUrl, interval);
+            // Schedule reconnection attempt if enabled (through constructor or callback)
+            if (options?.reconnectOnClose
+                || (this.options.reconnectOnClose && options?.reconnectOnClose === undefined)) {
+                const interval = options?.reconnectInterval || this.options.reconnectInterval;
+                this.scheduleReconnect(dispatch, lastUrl, interval);
+            }
         }
     };
 
@@ -216,9 +218,15 @@ export default class ReduxWsJsonRpc {
     private reconnect = (dispatch: Dispatch, lastUrl: string) => {
         this.reconnectTimeout = undefined;
         dispatch(reconnecting(this.reconnectCount, this.options.prefix));
+
+        // get new options if callback is defined
+        const {beforeReconnect} = this.options;
+        const options = beforeReconnect && beforeReconnect({lastUrl}, dispatch);
+        const url = options?.url || lastUrl;
+
         this.connect(
             {dispatch} as MiddlewareAPI,
-            {payload: {url: lastUrl}} as Action,
+            {payload: {url}} as Action,
         );
     };
 
