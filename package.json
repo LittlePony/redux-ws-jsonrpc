@@ -1,6 +1,6 @@
 {
   "name": "@littlepony/redux-ws-jsonrpc",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Redux with JSON-RPC over websocket middleware",
   "main": "dist",
   "files": [
