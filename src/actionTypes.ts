@@ -1,8 +1,7 @@
 export const DEFAULT_PREFIX = "WSRPC";
 
 // Library dispatched action types.
-export const WEBSOCKET_BEGIN_RECONNECT = "BEGIN_RECONNECT";
-export const WEBSOCKET_RECONNECT_ATTEMPT = "RECONNECT_ATTEMPT";
+export const WEBSOCKET_RECONNECTING = "RECONNECTING";
 export const WEBSOCKET_RECONNECTED = "RECONNECTED";
 export const WEBSOCKET_BROKEN = "BROKEN";
 export const WEBSOCKET_CLOSED = "CLOSED";

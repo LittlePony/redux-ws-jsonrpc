@@ -1,5 +1,4 @@
 import {
-    WEBSOCKET_CLOSED,
     WEBSOCKET_CONNECT,
     WEBSOCKET_DISCONNECT,
     WEBSOCKET_MESSAGE,
@@ -9,7 +8,6 @@ import {
 } from "./actionTypes";
 
 type Action =
-    | { type: typeof WEBSOCKET_CLOSED, payload: any, meta: any }
     | { type: typeof WEBSOCKET_CONNECT, payload: any, meta: any }
     | { type: typeof WEBSOCKET_DISCONNECT, payload: any, meta: any }
     | { type: typeof WEBSOCKET_MESSAGE, payload: any, meta: any }
@@ -17,12 +15,12 @@ type Action =
     | { type: typeof WEBSOCKET_SEND_METHOD, payload: any, meta: any }
     | { type: typeof WEBSOCKET_SEND_NOTIFICATION, payload: any, meta: any };
 
-type Options = {
+interface Options {
     prefix?: string
     reconnectInterval?: number
     reconnectOnClose?: boolean
-    onOpen?: (s: WebSocket) => void
-};
+    onReconnect?: () => void
+}
 
 export {
     Action,

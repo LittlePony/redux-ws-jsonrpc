@@ -1,8 +1,7 @@
 import {
     DEFAULT_PREFIX,
     WEBSOCKET_BROKEN,
-    WEBSOCKET_BEGIN_RECONNECT,
-    WEBSOCKET_RECONNECT_ATTEMPT,
+    WEBSOCKET_RECONNECTING,
     WEBSOCKET_RECONNECTED,
     WEBSOCKET_CLOSED,
     WEBSOCKET_CONNECT,
@@ -76,37 +75,46 @@ export const connect = (url: string, ...args: ConnectRestArgs) => {
         { url, protocols },
     );
 };
-export const disconnect = (prefix?: string) => buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_DISCONNECT}`);
-export const sendMethod = (method: string, msg: any, id?: any, prefix?: string) => (
-    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_METHOD}`, msg, { method, id })
-);
-export const sendNotification = (method: string, msg: any, prefix?: string) => (
-    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_NOTIFICATION}`, msg, { method })
-);
+export const disconnect = (prefix?: string) =>
+    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_DISCONNECT}`);
+
+export const sendMethod = (method: string, msg: any, id?: any, prefix?: string) =>
+    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_METHOD}`, msg, { method, id });
+
+export const sendNotification = (method: string, msg: any, prefix?: string) =>
+    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_NOTIFICATION}`, msg, { method });
 
 // Action creators for actions dispatched by redux-websocket. All of these must
 // take a prefix. The default prefix should be used unless a user has created
 // this middleware with the prefix option set.
-export const beginReconnect = (prefix: string) => buildAction(`${prefix}::${WEBSOCKET_BEGIN_RECONNECT}`);
-export const reconnectAttempt = (count: number, prefix: string) => buildAction(`${prefix}::${WEBSOCKET_RECONNECT_ATTEMPT}`, { count });
-export const reconnected = (prefix: string) => buildAction(`${prefix}::${WEBSOCKET_RECONNECTED}`);
-export const open = (event: Event, prefix: string) => buildAction(`${prefix}::${WEBSOCKET_OPEN}`, event);
-export const broken = (prefix: string) => buildAction(`${prefix}::${WEBSOCKET_BROKEN}`);
-export const closed = (event: Event, prefix: string) => buildAction(`${prefix}::${WEBSOCKET_CLOSED}`, event);
-export const error = (originalAction: Action | null, err: Error, prefix: string) => (
+export const reconnecting = (count: number, prefix: string) =>
+    buildAction(`${prefix}::${WEBSOCKET_RECONNECTING}`, { count });
+
+export const reconnected = (prefix: string) =>
+    buildAction(`${prefix}::${WEBSOCKET_RECONNECTED}`);
+
+export const open = (event: Event, prefix: string) =>
+    buildAction(`${prefix}::${WEBSOCKET_OPEN}`, event);
+
+export const broken = (prefix: string) =>
+    buildAction(`${prefix}::${WEBSOCKET_BROKEN}`);
+
+export const closed = (event: CloseEvent, prefix: string) =>
+    buildAction(`${prefix}::${WEBSOCKET_CLOSED}`, event);
+
+export const error = (originalAction: Action | null, err: Error, prefix: string) =>
     buildAction(`${prefix}::${WEBSOCKET_ERROR}`, err, {
         message: err.message,
         name: err.name,
         originalAction,
-    })
-);
-export const rpcNotification = (event: MessageEvent, prefix: string, methodName: string) => (
+    });
+
+export const rpcNotification = (event: MessageEvent, prefix: string, methodName: string) =>
     buildAction(`${prefix}::NOTIFICATION_${methodName.toUpperCase()}`, {
         event,
         message: JSON.parse(event.data),
         origin: event.origin,
-    })
-);
-export const rpcMethod = (payload: any, prefix: string, methodName: string) => (
-    buildAction(`${prefix}::METHOD_${methodName.toUpperCase()}`, payload)
-);
+    });
+
+export const rpcMethod = (payload: any, prefix: string, methodName: string) =>
+    buildAction(`${prefix}::METHOD_${methodName.toUpperCase()}`, payload);

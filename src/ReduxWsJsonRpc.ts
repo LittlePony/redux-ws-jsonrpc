@@ -1,12 +1,11 @@
 import { Dispatch, MiddlewareAPI } from "redux";
 import { WebSocketNotInitialized } from "./errors";
 import {
-    beginReconnect,
     broken,
     closed,
     error,
     open,
-    reconnectAttempt,
+    reconnecting,
     reconnected,
     rpcNotification,
     rpcMethod,
@@ -17,7 +16,7 @@ interface Options {
     prefix: string;
     reconnectInterval: number;
     reconnectOnClose: boolean;
-    onOpen?: (s: WebSocket) => void;
+    onReconnect?: () => void;
 }
 
 interface QueueElement {
@@ -30,7 +29,7 @@ interface QueueElement {
 }
 
 interface Queue {
-    [x: string]: QueueElement;
+    [x: number]: QueueElement;
 }
 
 /**
@@ -44,17 +43,13 @@ export default class ReduxWsJsonRpc {
     private readonly options: Options;
 
     // WebSocket connection.
-    private websocket: WebSocket | null = null;
+    private websocket: WebSocket | undefined = undefined;
 
     // Keep track of how many times we"ve attempted to reconnect.
     private reconnectCount: number = 0;
 
     // We"ll create an interval to try and reconnect if the socket connection breaks.
-    private reconnectionInterval: NodeJS.Timeout | null = null;
-
-    // Keep track of the last URL we connected to, so that when we automatically
-    // try to reconnect, we can connect to the correct URL.
-    private lastSocketUrl: string | null = null;
+    private reconnectTimeout: NodeJS.Timeout | undefined = undefined;
 
     // Keep track of if the WebSocket connection has ever successfully opened.
     private hasOpened = false;
@@ -86,20 +81,17 @@ export default class ReduxWsJsonRpc {
      */
     connect = ({dispatch}: MiddlewareAPI, {payload}: Action) => {
         this.close();
-
         const { prefix } = this.options;
-
-        this.lastSocketUrl = payload.url;
         this.websocket = new WebSocket(payload.url, payload.protocols || undefined);
 
-        this.websocket.addEventListener("close", event => this.handleClose(dispatch, prefix, event));
-        this.websocket.addEventListener("error", () => this.handleError(dispatch, prefix));
-        this.websocket.addEventListener("open", event => {
-            this.handleOpen(dispatch, prefix, this.options.onOpen, event);
-        });
-        this.websocket.addEventListener("message", event => {
-            this.handleMessage(dispatch, prefix, event);
-        });
+        this.websocket.addEventListener("close", event =>
+            this.handleClose(dispatch, prefix, event));
+        this.websocket.addEventListener("error", () =>
+            this.handleError(dispatch, prefix));
+        this.websocket.addEventListener("open", event =>
+            this.handleOpen(dispatch, prefix, event));
+        this.websocket.addEventListener("message", event =>
+            this.handleMessage(dispatch, prefix, event));
     };
 
     /**
@@ -115,19 +107,28 @@ export default class ReduxWsJsonRpc {
         }
     };
 
-    private buildRpcFrame = (method: string, params: any, id: number | undefined = undefined) =>
-        JSON.stringify({
-            jsonrpc: "2.0",
-            method,
-            params,
-            id,
-        });
+    /**
+     * Create JSON-RPC 2.0 compatible message
+     * @param {string} method
+     * @param {any} params
+     * @param {number} id
+     */
+    private buildRpcFrame = (
+        method: string,
+        params: any,
+        id: number | undefined = undefined,
+    ) => JSON.stringify({
+        jsonrpc: "2.0",
+        method,
+        params,
+        id,
+    });
 
     private callMethod = (method: string, payload: any, id: number) =>
         new Promise<any>((resolve, reject) => {
             if (this.websocket) {
                 this.websocket.send(this.buildRpcFrame(method, payload, id));
-                this.queue[id] = { promise: [resolve, reject] };
+                this.queue[id] = {promise: [resolve, reject]};
                 this.queue[id].method = method;
                 this.queue[id].timeout = setTimeout(() => {
                     delete this.queue[id];
@@ -162,7 +163,7 @@ export default class ReduxWsJsonRpc {
      *
      * @throws {Error} Socket connection must exist.
      */
-    sendNotification = (store: MiddlewareAPI, { payload, meta }: Action) => {
+    sendNotification = (store: MiddlewareAPI, {payload, meta}: Action) => {
         if (this.websocket) {
             this.websocket.send(this.buildRpcFrame(meta.method, payload));
         } else {
@@ -177,14 +178,17 @@ export default class ReduxWsJsonRpc {
      * @param {string} prefix
      * @param {Event} event
      */
-    private handleClose = (dispatch: Dispatch, prefix: string, event: Event) => {
+    private handleClose = (dispatch: Dispatch, prefix: string, event: CloseEvent) => {
+        const lastUrl = (event.target as WebSocket).url;
         dispatch(closed(event, prefix));
 
-        // Conditionally attempt reconnection if enabled and applicable
-        const {reconnectOnClose} = this.options;
-        if (reconnectOnClose && this.canAttemptReconnect()) {
-            this.handleBrokenConnection(dispatch);
-        }
+        // Notify Redux that our connection broke.
+        this.reconnectCount === 0 && !event.wasClean
+            && dispatch(broken(prefix));
+
+        // Schedule reconnection attempt if enabled and "dirty" closed
+        this.options.reconnectOnClose && !event.wasClean
+            && this.scheduleReconnect(dispatch, lastUrl);
     };
 
     /**
@@ -194,10 +198,29 @@ export default class ReduxWsJsonRpc {
      * @param {string} prefix
      */
     private handleError = (dispatch: Dispatch, prefix: string) => {
-        dispatch(error(null, new Error("`redux-websocket` error"), prefix));
-        if (this.canAttemptReconnect()) {
-            this.handleBrokenConnection(dispatch);
-        }
+        dispatch(error(null, new Error("WebSocket error"), prefix));
+    };
+
+    private reconnect = (dispatch: Dispatch, lastUrl: string) => {
+        dispatch(reconnecting(this.reconnectCount, this.options.prefix));
+        this.connect(
+            {dispatch} as MiddlewareAPI,
+            {payload: {url: lastUrl}} as Action,
+        );
+    };
+
+    /**
+     * Handle a broken socket connection.
+     * @param {Dispatch} dispatch
+     * @param {string} lastUrl
+     */
+    private scheduleReconnect = (dispatch: Dispatch, lastUrl: string) => {
+        this.websocket = undefined;
+        this.reconnectCount += 1;
+        this.reconnectTimeout = setTimeout(
+            () => this.reconnect(dispatch, lastUrl),
+            this.options.reconnectInterval,
+        );
     };
 
     /**
@@ -205,30 +228,21 @@ export default class ReduxWsJsonRpc {
      *
      * @param {Dispatch} dispatch
      * @param {string} prefix
-     * @param {(s: WebSocket) => void | undefined} onOpen
      * @param {Event} event
      */
     private handleOpen = (
         dispatch: Dispatch,
         prefix: string,
-        onOpen: ((s: WebSocket) => void) | undefined,
         event: Event,
     ) => {
         // Clean up any outstanding reconnection attempts.
-        if (this.reconnectionInterval) {
-            clearInterval(this.reconnectionInterval);
-
-            this.reconnectionInterval = null;
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = undefined;
             this.reconnectCount = 0;
 
             dispatch(reconnected(prefix));
         }
-
-        // Hook to allow consumers to get access to the raw socket.
-        if (onOpen && this.websocket != null) {
-            onOpen(this.websocket);
-        }
-
         // Now we"re fully open and ready to send messages.
         dispatch(open(event, prefix));
 
@@ -266,7 +280,7 @@ export default class ReduxWsJsonRpc {
         } else if (!id && method) {
             dispatch(rpcNotification(event, prefix, method));
         } else {
-            console.error("Unknown message type");
+            dispatch(error(null, new Error("Unknown server message type"), prefix));
         }
     };
 
@@ -279,61 +293,9 @@ export default class ReduxWsJsonRpc {
      */
     private close = (code?: number, reason?: string) => {
         if (this.websocket) {
-            this.websocket.close(code || 1000, reason || "WebSocket connection closed by redux-websocket.");
-
-            this.websocket = null;
+            this.websocket.close(code || 1000, reason || "Connection closed by client");
+            this.websocket = undefined;
             this.hasOpened = false;
         }
     };
-
-    /**
-     * Handle a broken socket connection.
-     * @private
-     *
-     * @param {Dispatch} dispatch
-     */
-    private handleBrokenConnection = (dispatch: Dispatch) => {
-        const {prefix, reconnectInterval} = this.options;
-
-        this.websocket = null;
-
-        // First, dispatch actions to notify Redux that our connection broke.
-        dispatch(broken(prefix));
-        dispatch(beginReconnect(prefix));
-
-        this.reconnectCount = 1;
-
-        dispatch(reconnectAttempt(this.reconnectCount, prefix));
-
-        // Attempt to reconnect immediately by calling connect with assertions
-        // that the arguments conform to the types we expect.
-        this.connect(
-            {dispatch} as MiddlewareAPI,
-            {payload: {url: this.lastSocketUrl}} as Action,
-        );
-
-        // Attempt reconnecting on an interval.
-        this.reconnectionInterval = setInterval(() => {
-            this.reconnectCount += 1;
-
-            dispatch(reconnectAttempt(this.reconnectCount, prefix));
-
-            // Call connect again, same way.
-            this.connect(
-                {dispatch} as MiddlewareAPI,
-                {payload: {url: this.lastSocketUrl}} as Action,
-            );
-        }, reconnectInterval);
-    };
-
-    // Only attempt to reconnect if the connection has ever successfully opened,
-    // and we"re not currently trying to reconnect.
-    //
-    // This prevents ongoing reconnect loops to connections that have not
-    // successfully opened before, such as net::ERR_CONNECTION_REFUSED errors.
-    //
-    // This also prevents starting multiple reconnection attempt loops.
-    private canAttemptReconnect(): boolean {
-        return this.hasOpened && this.reconnectionInterval == null;
-    }
 }
