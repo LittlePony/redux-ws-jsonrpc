@@ -114,6 +114,12 @@ export default class ReduxWsJsonRpc {
         id,
     });
 
+    /**
+     * Sends data to socket and enqueue element
+     * @param method
+     * @param payload
+     * @param id
+     */
     private callMethod = (method: string, payload: any, id: number) =>
         new Promise<any>((resolve, reject) => {
             if (this.websocket) {
@@ -140,7 +146,7 @@ export default class ReduxWsJsonRpc {
         const methodName = meta.method.toUpperCase();
         this.callMethod(meta.method, payload, this.methodId)
             .then(({result, prefix}) => dispatch(rpcMethod(result, prefix, methodName)))
-            .catch(err => dispatch({type: `METHOD_${methodName}_ERROR`, payload: err}));
+            .catch(err => dispatch({type: `METHOD_${methodName}_ERROR`, payload: err, error: true}));
     };
 
     /**

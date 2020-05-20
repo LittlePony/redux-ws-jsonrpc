@@ -85,7 +85,7 @@ describe("ReduxWsJsonRpc", () => {
 
     global.WebSocket = WebSocket;
 
-    describe("handle server events", () => {
+    describe("server close connection", () => {
         const action = {type: "WSRPC::CONNECT", payload: {url}};
         let server: WS;
 
@@ -94,13 +94,14 @@ describe("ReduxWsJsonRpc", () => {
             reduxWebSocket = new ReduxWsJsonRpc(options);
             reduxWebSocket.connect(store, action as Action);
             await server.connected;
+            store.dispatch.mockClear();
         });
 
         afterEach(() => {
             WS.clean();
         });
 
-        it("action dispatched on server close connection", () => {
+        it("'close' handler invoked and action CLOSED dispatched at clean close", () => {
             const fakeCloseEvent = {type: "close", wasClean: true};
             // @ts-ignore
             const spyHandleClose = jest.spyOn(reduxWebSocket, "handleClose");
@@ -109,6 +110,88 @@ describe("ReduxWsJsonRpc", () => {
             expect(spyHandleClose).toBeCalledTimes(1);
             expect(spyHandleClose)
                 .toHaveBeenCalledWith(store.dispatch, "WSRPC", expect.objectContaining(fakeCloseEvent));
+
+            expect(store.dispatch).toBeCalledTimes(1);
+            expect(store.dispatch).toHaveBeenCalledWith({
+                type: "WSRPC::CLOSED",
+                meta: {
+                    timestamp: expect.any(Date),
+                },
+                payload: expect.anything(),
+            });
+        });
+
+        it("CLOSED and BROKEN actions dispatched at dirty close", () => {
+            server.close({wasClean: false, code: 1006, reason: "Error"});
+
+            expect(store.dispatch).toBeCalledTimes(2);
+            expect(store.dispatch).toHaveBeenCalledWith({
+                type: "WSRPC::CLOSED",
+                meta: {
+                    timestamp: expect.any(Date),
+                },
+                payload: expect.anything(),
+            });
+            expect(store.dispatch).toHaveBeenCalledWith({
+                type: "WSRPC::BROKEN",
+                meta: {
+                    timestamp: expect.any(Date),
+                },
+            });
+        });
+    });
+
+    describe("server close connection with reconnection", () => {
+        const action = {type: "WSRPC::CONNECT", payload: {url}};
+        let server: WS;
+
+        beforeEach(async () => {
+            server = new WS(url);
+            reduxWebSocket = new ReduxWsJsonRpc({...options, reconnectOnClose: true});
+            reduxWebSocket.connect(store, action as Action);
+            await server.connected;
+            store.dispatch.mockClear();
+        });
+
+        afterEach(() => {
+            WS.clean();
+        });
+
+        it("schedule reconnect and counter increased at dirty close", () => {
+            // @ts-ignore
+            const spyScheduleReconnect = jest.spyOn(reduxWebSocket, "scheduleReconnect");
+            server.close({wasClean: false, code: 1006, reason: "Error"});
+
+            expect(spyScheduleReconnect).toBeCalledTimes(1);
+            expect(spyScheduleReconnect)
+                .toHaveBeenCalledWith(store.dispatch, url, options.reconnectInterval);
+            // @ts-ignore
+            expect(reduxWebSocket.reconnectCount).toBe(1);
+
+            expect(store.dispatch).toBeCalledTimes(2); // CLOSED & BROKEN
+        });
+
+        it("scheduled reconnect invoked and action RECONNECTING dispatched", () => {
+            jest.useFakeTimers();
+            // @ts-ignore
+            const spyReconnect = jest.spyOn(reduxWebSocket, "reconnect");
+            server.close({wasClean: false, code: 1006, reason: "Error"});
+
+            store.dispatch.mockClear();
+            jest.runOnlyPendingTimers();
+
+            expect(spyReconnect).toBeCalledTimes(1);
+            expect(spyReconnect)
+                .toHaveBeenCalledWith(store.dispatch, url);
+
+            expect(store.dispatch).toBeCalledTimes(1);
+            expect(store.dispatch).toHaveBeenCalledWith({
+                type: "WSRPC::RECONNECTING",
+                meta: {
+                    timestamp: expect.any(Date),
+                },
+                payload: expect.anything(),
+            });
         });
     });
 });
