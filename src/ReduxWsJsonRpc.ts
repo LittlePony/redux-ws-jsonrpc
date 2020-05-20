@@ -73,7 +73,9 @@ export default class ReduxWsJsonRpc {
     connect = ({dispatch}: MiddlewareAPI, {payload}: Action) => {
         this.close();
         const {prefix} = this.options;
-        this.websocket = new WebSocket(payload.url, payload.protocols || undefined);
+        this.websocket = payload.protocols
+            ? new WebSocket(payload.url, payload.protocols)
+            : new WebSocket(payload.url);
 
         this.websocket.addEventListener("close", event =>
             this.handleClose(dispatch, prefix, event));
