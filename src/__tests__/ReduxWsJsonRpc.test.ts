@@ -165,8 +165,8 @@ describe("ReduxWsJsonRpc", () => {
             expect(spyScheduleReconnect).toBeCalledTimes(1);
             expect(spyScheduleReconnect)
                 .toHaveBeenCalledWith(store.dispatch, url, options.reconnectInterval);
-            // @ts-ignore
-            expect(reduxWebSocket.reconnectCount).toBe(1);
+            /* eslint dot-notation: "off" */
+            expect(reduxWebSocket["reconnectCount"]).toBe(1);
 
             expect(store.dispatch).toBeCalledTimes(2); // CLOSED & BROKEN
         });
@@ -190,8 +190,23 @@ describe("ReduxWsJsonRpc", () => {
                 meta: {
                     timestamp: expect.any(Date),
                 },
-                payload: expect.anything(),
+                payload: {
+                    count: 1,
+                },
             });
+        //     store.dispatch.mockClear();
+        //     jest.runOnlyPendingTimers();
+        //     // expect(spyReconnect).toBeCalledTimes(2);
+        //     expect(store.dispatch).toBeCalledTimes(2);
+        //     expect(store.dispatch).toHaveBeenCalledWith({
+        //         type: "WSRPC::CLOSED",
+        //         meta: {
+        //             timestamp: expect.any(Date),
+        //         },
+        //         payload: {
+        //             count: 2,
+        //         },
+        //     });
         });
     });
 });

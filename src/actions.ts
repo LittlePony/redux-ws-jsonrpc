@@ -78,11 +78,11 @@ export const connect = (url: string, ...args: ConnectRestArgs) => {
 export const disconnect = (prefix?: string) =>
     buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_DISCONNECT}`);
 
-export const sendMethod = (method: string, msg: any, id?: any, prefix?: string) =>
-    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_METHOD}`, msg, { method, id });
+export const sendMethod = (method: string, payload: any, id?: any, prefix?: string) =>
+    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_METHOD}`, payload, { method, id });
 
-export const sendNotification = (method: string, msg: any, prefix?: string) =>
-    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_NOTIFICATION}`, msg, { method });
+export const sendNotification = (method: string, payload: any, prefix?: string) =>
+    buildAction(`${prefix || DEFAULT_PREFIX}::${WEBSOCKET_SEND_NOTIFICATION}`, payload, { method });
 
 // Action creators for actions dispatched by redux-websocket. All of these must
 // take a prefix. The default prefix should be used unless a user has created
@@ -108,13 +108,13 @@ export const error = (originalAction: Action | null, err: Error, prefix: string)
         name: err.name,
         originalAction,
     });
-
+// used as server response
 export const rpcNotification = (event: MessageEvent, prefix: string, methodName: string) =>
     buildAction(`${prefix}::NOTIFICATION_${methodName.toUpperCase()}`, {
         event,
         message: JSON.parse(event.data),
         origin: event.origin,
     });
-
+// used as server request
 export const rpcMethod = (payload: any, prefix: string, methodName: string) =>
     buildAction(`${prefix}::METHOD_${methodName.toUpperCase()}`, payload);
