@@ -1,5 +1,11 @@
 import { Dispatch, MiddlewareAPI } from "redux";
-import { WebSocketNotInitialized } from "./errors";
+import {
+    WebSocketNotInitialized,
+    UnknownMessageType,
+    ServerRpcError,
+    WebSocketError,
+    ServerTimeout,
+} from "./errors";
 import {
     broken,
     closed,
@@ -122,17 +128,13 @@ export default class ReduxWsJsonRpc {
      */
     private callMethod = (method: string, payload: any, id: number) =>
         new Promise<any>((resolve, reject) => {
-            if (this.websocket) {
-                this.websocket.send(this.buildRpcFrame(method, payload, id));
-                this.queue[id] = {promise: [resolve, reject]};
-                this.queue[id].method = method;
-                this.queue[id].timeout = setTimeout(() => {
-                    delete this.queue[id];
-                    reject(new Error("Server response timeout"));
-                }, this.options.rpcTimeout);
-            } else {
-                throw new WebSocketNotInitialized();
-            }
+            this.websocket?.send(this.buildRpcFrame(method, payload, id));
+            this.queue[id] = {promise: [resolve, reject]};
+            this.queue[id].method = method;
+            this.queue[id].timeout = setTimeout(() => {
+                delete this.queue[id];
+                reject(new ServerTimeout());
+            }, this.options.rpcTimeout);
         });
 
     /**
@@ -142,9 +144,12 @@ export default class ReduxWsJsonRpc {
      * @param {Action} action
      */
     sendMethod = ({dispatch}: MiddlewareAPI, {payload, meta}: Action) => {
+        if (!this.websocket) {
+            throw new WebSocketNotInitialized();
+        }
         this.methodId += 1;
         const methodName = meta.method.toUpperCase();
-        this.callMethod(meta.method, payload, this.methodId)
+        return this.callMethod(meta.method, payload, this.methodId)
             .then(({result, prefix}) => dispatch(rpcMethod(result, prefix, methodName)))
             .catch(err => dispatch({type: `METHOD_${methodName}_ERROR`, payload: err, error: true}));
     };
@@ -203,7 +208,7 @@ export default class ReduxWsJsonRpc {
      * @param {string} prefix
      */
     private handleError = (dispatch: Dispatch, prefix: string) =>
-        dispatch(error(null, new Error("WebSocket error"), prefix));
+        dispatch(error(null, new WebSocketError(), prefix));
 
     /**
      * Reconnection attempt
@@ -285,13 +290,13 @@ export default class ReduxWsJsonRpc {
 
             timeout && clearTimeout(timeout);
             data.error
-                ? reject(new Error(data.error.message || "Unknown server error"))
+                ? reject(new ServerRpcError(data.error.message))
                 : resolve({result, prefix});
             delete this.queue[id];
         } else if (!id && method) { // Server notification
             dispatch(rpcNotification(event, prefix, method));
         } else {
-            dispatch(error(null, new Error("Unknown server message type"), prefix));
+            dispatch(error(null, new UnknownMessageType(), prefix));
         }
     };
 

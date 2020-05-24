@@ -23,6 +23,7 @@ module.exports = {
         indent: ["error", 4],
         "@typescript-eslint/indent": ["error", 4],
         "@typescript-eslint/quotes": ["error", "double"],
+        "@typescript-eslint/camelcase": "off",
         "no-unused-expressions": "off",
         "@typescript-eslint/no-unused-expressions": ["off"],
         "object-curly-newline": "off",

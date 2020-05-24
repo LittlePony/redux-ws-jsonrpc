@@ -3,6 +3,7 @@ import WS from "jest-websocket-mock";
 import ReduxWsJsonRpc from "../ReduxWsJsonRpc";
 import { Action } from "../types";
 import * as actionTypes from "../actionTypes";
+import * as errors from "../errors";
 
 declare global {
     namespace NodeJS {
@@ -26,11 +27,6 @@ describe("ReduxWsJsonRpc", () => {
     };
     let reduxWebSocket: ReduxWsJsonRpc;
 
-    beforeEach(() => {
-        reduxWebSocket = new ReduxWsJsonRpc(options);
-        store.dispatch.mockClear();
-    });
-
     describe("connect", () => {
         const action = {type: "WSRPC::CONNECT", payload: {url}};
         const closeMock = jest.fn();
@@ -42,8 +38,10 @@ describe("ReduxWsJsonRpc", () => {
         }));
 
         beforeEach(() => {
+            reduxWebSocket = new ReduxWsJsonRpc(options);
             addEventListenerMock.mockClear();
             closeMock.mockClear();
+            store.dispatch.mockClear();
             reduxWebSocket.connect(store, action as Action);
         });
 
@@ -85,6 +83,17 @@ describe("ReduxWsJsonRpc", () => {
                 },
                 payload: fakeCloseEvent,
             });
+        });
+
+        it("instanciate WebSocket with protocols", () => {
+            global.WebSocket.mockClear();
+            const protocols = ["fakeProtocol"];
+            const actionWithProto = {type: "WSRPC::CONNECT", payload: {url, protocols}};
+            reduxWebSocket = new ReduxWsJsonRpc(options);
+            reduxWebSocket.connect(store, actionWithProto as Action);
+
+            expect(global.WebSocket).toHaveBeenCalledTimes(1);
+            expect(global.WebSocket).toHaveBeenCalledWith(url, protocols);
         });
     });
 
@@ -259,6 +268,13 @@ describe("ReduxWsJsonRpc", () => {
 
     describe("send notification", () => {
         const action = {type: "WSRPC::CONNECT", payload: {url}};
+        const fakeSendAction = {
+            type: "WSRPC::SEND_NOTIFICATION",
+            payload: [1, "two"],
+            meta: {
+                method: "fakeMethod",
+            },
+        };
         let server: WS;
 
         beforeEach(async () => {
@@ -275,13 +291,6 @@ describe("ReduxWsJsonRpc", () => {
         });
 
         it("send valid data", async () => {
-            const fakeSendAction = {
-                type: "WSRPC::SEND_NOTIFICATION",
-                payload: [1, "two"],
-                meta: {
-                    method: "fakeMethod",
-                },
-            };
             reduxWebSocket.sendNotification(store, fakeSendAction as Action);
 
             await expect(server).toReceiveMessage({
@@ -290,16 +299,30 @@ describe("ReduxWsJsonRpc", () => {
                 params: [1, "two"],
             });
         });
+
+        it("should throw error if websocket not instanciated", () => {
+            reduxWebSocket.disconnect();
+
+            expect(() => reduxWebSocket.sendNotification(store, fakeSendAction as Action))
+                .toThrow(errors.WebSocketNotInitialized);
+        });
     });
 
     describe("send method", () => {
-        const action = {type: "WSRPC::CONNECT", payload: {url}};
+        const fakeConnectAction = {type: "WSRPC::CONNECT", payload: {url}};
+        const fakeSendAction = {
+            type: "WSRPC::SEND_METHOD",
+            payload: [1, "two"],
+            meta: {
+                method: "fakeMethod",
+            },
+        };
         let server: WS;
 
         beforeEach(async () => {
             server = new WS(url, {jsonProtocol: true});
             reduxWebSocket = new ReduxWsJsonRpc(options);
-            reduxWebSocket.connect(store, action as Action);
+            reduxWebSocket.connect(store, fakeConnectAction as Action);
             await server.connected;
             store.dispatch.mockClear();
         });
@@ -310,13 +333,6 @@ describe("ReduxWsJsonRpc", () => {
         });
 
         it("send valid method", async () => {
-            const fakeSendAction = {
-                type: "WSRPC::SEND_METHOD",
-                payload: [1, "two"],
-                meta: {
-                    method: "fakeMethod",
-                },
-            };
             reduxWebSocket.sendMethod(store, fakeSendAction as Action);
 
             await expect(server).toReceiveMessage({
@@ -326,6 +342,102 @@ describe("ReduxWsJsonRpc", () => {
                 params: [1, "two"],
             });
             expect(reduxWebSocket["methodId"]).toBe(1);
+        });
+
+        it("resolve callback invoked with valid server response", async () => {
+            reduxWebSocket.sendMethod(store, fakeSendAction as Action);
+            // @ts-ignore
+            reduxWebSocket["queue"]["1"].promise[0] = jest.fn();
+            // @ts-ignore
+            const resolve = reduxWebSocket["queue"]["1"].promise[0];
+
+            await expect(server).toReceiveMessage({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "fakeMethod",
+                params: [1, "two"],
+            });
+            server.send({
+                id: 1,
+                jsonrpc: "2.0",
+                result: [3, "four"],
+            });
+            expect(resolve).toBeCalledTimes(1);
+            expect(resolve).toBeCalledWith({prefix: "WSRPC", result: [3, "four"]});
+        });
+
+        it("reject callback invoked with error server response", async () => {
+            reduxWebSocket.sendMethod(store, fakeSendAction as Action);
+            // @ts-ignore
+            reduxWebSocket["queue"]["1"].promise[1] = jest.fn();
+            // @ts-ignore
+            const reject = reduxWebSocket["queue"]["1"].promise[1];
+
+            await expect(server).toReceiveMessage({
+                id: 1,
+                jsonrpc: "2.0",
+                method: "fakeMethod",
+                params: [1, "two"],
+            });
+            server.send({
+                id: 1,
+                jsonrpc: "2.0",
+                error: {code: -32700, message: "Parse error"},
+            });
+
+            expect(reject).toBeCalledTimes(1);
+            expect(reject).toBeCalledWith(expect.any(errors.ServerRpcError));
+        });
+
+        it("action dispatched", async () => {
+            server.close();
+            server = new WS(url, {jsonProtocol: true});
+            server.on("connection", socket => {
+                socket.on("message", () => {
+                    socket.send("{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":[3,\"four\"]}");
+                });
+            });
+            reduxWebSocket = new ReduxWsJsonRpc(options);
+            reduxWebSocket.connect(store, fakeConnectAction as Action);
+            await server.connected;
+            store.dispatch.mockClear();
+
+            await reduxWebSocket.sendMethod(store, fakeSendAction as Action);
+
+            expect(store.dispatch).toBeCalledTimes(1);
+            expect(store.dispatch).toBeCalledWith({
+                type: "WSRPC::METHOD_FAKEMETHOD",
+                payload: [3, "four"],
+                meta: {
+                    timestamp: expect.any(Date),
+                },
+            });
+        });
+
+        it("send valid method and no answer", async () => {
+            const fakeErrorAction = {
+                type: "METHOD_FAKEMETHOD_ERROR",
+                error: true,
+                payload: expect.any(Error),
+            };
+            const spySetTimeout = jest.spyOn(window, "setTimeout");
+            const res = reduxWebSocket.sendMethod(store, fakeSendAction as Action);
+            store.dispatch.mockClear();
+            spySetTimeout.mock.calls.forEach(([cb, , ...args]) => cb(...args));
+
+            await expect(res).resolves.toEqual(fakeErrorAction);
+
+            expect(store.dispatch).toBeCalledTimes(1);
+            expect(store.dispatch).toHaveBeenCalledWith(fakeErrorAction);
+
+            spySetTimeout.mockRestore();
+        });
+
+        it("should throw error if websocket not instanciated", () => {
+            reduxWebSocket.disconnect();
+
+            expect(() => reduxWebSocket.sendMethod(store, fakeSendAction as Action))
+                .toThrow(errors.WebSocketNotInitialized);
         });
     });
 
@@ -346,7 +458,7 @@ describe("ReduxWsJsonRpc", () => {
             WS.clean();
         });
 
-        it("receive server notification", () => {
+        it("receive valid server notification", () => {
             const fakeMessageEvent = {type: "message"};
             store.dispatch.mockClear();
             server.send({
@@ -370,6 +482,24 @@ describe("ReduxWsJsonRpc", () => {
                     },
                     origin: url,
                 },
+            });
+        });
+
+        it("receive invalid server message", () => {
+            store.dispatch.mockClear();
+            server.send("fakeInvalidMessage");
+
+            expect(store.dispatch).toBeCalledTimes(1);
+            expect(store.dispatch).toHaveBeenCalledWith({
+                type: "WSRPC::ERROR",
+                error: true,
+                meta: {
+                    timestamp: expect.any(Date),
+                    name: "UnknownMessageTypeError",
+                    message: "Unknown server message type",
+                    originalAction: null,
+                },
+                payload: expect.any(errors.UnknownMessageType),
             });
         });
     });

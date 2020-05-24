@@ -1,10 +1,10 @@
 import * as errors from "../errors";
 
 describe("test errors", () => {
-    it("should throw InvalidToken", () => {
+    it("should throw ServerRpcError error", () => {
         const errorFunc = () => {
-            throw new errors.WebSocketNotInitialized();
+            throw new errors.ServerRpcError();
         };
-        expect(errorFunc).toThrow(errors.WebSocketNotInitialized);
+        expect(errorFunc).toThrow(errors.ServerRpcError);
     });
 });
