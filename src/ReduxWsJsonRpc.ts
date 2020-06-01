@@ -31,6 +31,7 @@ interface Options {
     reconnectOnClose: boolean;
     afterClose?: (params: AfterCloseParams, d: Dispatch) => AfterCloseOptions;
     beforeReconnect?: (params: BeforeReconnectParams, d: Dispatch) => BeforeReconnectOptions;
+    onReconnected?: () => void,
     rpcTimeout: number;
 }
 
@@ -263,6 +264,7 @@ export default class ReduxWsJsonRpc {
         if (this.reconnectCount > 0) {
             this.reconnectCount = 0;
             dispatch(reconnected(prefix));
+            this.options.onReconnected?.();
         }
         // Now we"re fully open and ready to send messages.
         dispatch(open(event, prefix));

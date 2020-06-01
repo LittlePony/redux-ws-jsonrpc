@@ -40,6 +40,7 @@ interface Options {
     reconnectOnClose?: boolean;
     afterClose?: (params: AfterCloseParams, d: Dispatch) => AfterCloseOptions;
     beforeReconnect?: (params: BeforeReconnectParams, d: Dispatch) => BeforeReconnectOptions;
+    onReconnected?: () => void,
     rpcTimeout?: number;
 }
 

@@ -24,6 +24,7 @@ module.exports = {
         "@typescript-eslint/indent": ["error", 4],
         "@typescript-eslint/quotes": ["error", "double"],
         "@typescript-eslint/camelcase": "off",
+        "@typescript-eslint/naming-convention": "error",
         "no-unused-expressions": "off",
         "@typescript-eslint/no-unused-expressions": ["off"],
         "object-curly-newline": "off",
