@@ -20,8 +20,8 @@ module.exports = {
         "plugin:promise/recommended",
     ],
     rules: {
-        indent: ["error", 4],
-        "@typescript-eslint/indent": ["error", 4],
+        indent: ["error", 4, {SwitchCase: 1}],
+        "@typescript-eslint/indent": ["error", 4, {SwitchCase: 1}],
         "@typescript-eslint/quotes": ["error", "double"],
         "@typescript-eslint/camelcase": "off",
         "@typescript-eslint/naming-convention": "error",
@@ -39,4 +39,5 @@ module.exports = {
         }],
         "implicit-arrow-linebreak": 0,
     },
+    ignorePatterns: ["coverage", "dist"],
 };
